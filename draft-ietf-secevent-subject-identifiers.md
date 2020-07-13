@@ -27,6 +27,13 @@ author:
     organization: Coinbase
     email: marius.scurtescu@coinbase.com
 
+ -
+    ins: A. Tulshibagwale
+    name: Atul Tulshibagwale
+    organization: Google
+    email: atultulshi@google.com
+
+
 normative:
   BCP26: RFC8126
   JSON: RFC7159
@@ -43,6 +50,26 @@ normative:
     target: http://www.iana.org/assignments/jwt
     author:
       org: IANA
+  SAML.REF:
+    title: Assertions and Protocols for the OASIS Security Assertion Markup Language (SAML) V2.0
+    target: http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf
+    date: March 2005
+    author:
+     -
+       name: Scott Cantor
+       org: Internet2
+
+     -
+       name: John Kemp
+       org: Nokia
+
+     -
+       name: Rob Philpott
+       org: RSA Security
+     
+     -
+       name: Eve Maler
+       org: Sun Microsystems
 
 informative:
   OIDC:
@@ -91,11 +118,66 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
 document are to be interpreted as described in {{!RFC2119}}.
 
+Subject Principals {#subject-principals}
+==================
+
+Subject Principals are the management entities associated with Subjects. These may be human or robotic principals or devices or other entities that are managed by transmitters and receivers. For example, the same Subject Principal may be referred to by an email address or a phone number. A transmitter or receiver will typically manage subject principals and organize them into sub-groupings such as tenants, groups, organizational units, etc.
+
+Subjects are identified by Subject Identifiers defined below.
+
+SPAGs {#subject-groups}
+-----
+Subject Principals MAY be grouped for administrative purposes into "Subject Principal Administrative Groupings" or SPAGs. For example, all users belonging to one customer of a "multi-tenanted" Transmitter may be in one SPAG. Alternatively, an Organizational Unit or a group of Subjects within a customer of a Transmitter (whether multi-tenanted or not) may be one SPAG. SPAGs may have overlapping sets of Subjects.
+
+A SPAG MAY be the Subject of certain stream update events defined later in this spec, hence is defined as a Subject Type of its own below. A SPAG identifier MAY be included in other subject types to disambiguate the subject.
+
+A SPAG subject identifier is agreed to offline between a transmitter and a receiver.
+
 Subject Identifiers {#sub-ids}
 ===================
 A Subject Identifier Type is a light-weight schema that describes a set of claims that identifies a subject.  Every Subject Identifier Type MUST have a unique name registered in the IANA "Security Event Subject Identifier Types" registry established by {{iana-sub-id-types}}.  A Subject Identifier Type MAY describe more claims than are strictly necessary to identify a subject, and MAY describe conditions under which those claims are required, optional, or prohibited.
 
-A Subject Identifier is a {{!JSON}} object containing a `subject_type` claim whose value is the name of a Subject Identifier Type, and a set of additional "payload claims" which are to be interpreted according to the rules defined by that Subject Identifier Type.  Payload claim values MUST match the format specified for the claim by the Subject Identifier Type. A Subject Identifier MUST NOT contain any payload claims prohibited or not described by its Subject Identifier Type, and MUST contain all payload claims required by its Subject Identifier Type.
+Common Claims in Subject Identifiers {#subject-common-claims}
+------------------------------------
+The following claims MAY be present in a subject of any subject type.
+
+### SPAG ID ###
+Subjects MAY be identified uniquely without referring to which SPAG they belong to. A transmitter MAY include a SPAG identifier as a part of the subject of any other subject type. If a SPAG identifier claim is included in a SET, then the name of the claim MUST be: `spag_id`
+
+### Subject Categories ###
+Subjects may be categorized as users, devices or sessions. To specify the category of a subject, a `category` claim MAY be included. If present, the claim MUST have a value that is one of:
+
+user:
+: Specifies that the subject category is a user.
+
+device:
+: Specifies that the subject category is a device.
+
+session:
+: Specifies that the subject category is a session.
+
+If the `category` claim is not present, the category is assumed to be `user`, unless a different default interpretationis specified in the subject type description.
+
+The subject category MUST be used by the Receiver to determine the scope of the event.
+
+Below is a non-normative example Subject Identifier with common claims:
+
+~~~
+{
+  "subject_type": "id_token_claims",
+  "cateogry": "device",
+  "spag_id" : "https://example.com/v2/Groups/e9e30dba-f08f-4109-8486-d5c6a331660a",
+  "phone_number": "+1 (408) 555-1212",
+}
+~~~
+{: #figexamplecommonclaims title="Example: Subject Identifier with Common Claims."}
+
+Subject Identifier Conformance {#subject-conformance}
+------------------------------
+
+Every Subject Identifier MUST contain a `subject_type` claim, whose value MUST be a name that uniquely identifies the Subject Identifier Type of the Subject Identifier.
+
+A Subject Identifier is a {{!JSON}} object containing a `subject_type` claim whose value is the name of a Subject Identifier Type, and a set of additional "payload claims" which are to be interpreted according to the rules defined in the Common Claims {{subject-common-claims}} or by that Subject Identifier Type. Payload claim values MUST match the format specified for the claim by the Common Claims or by the Subject Identifier Type. A Subject Identifier MUST NOT contain any payload claims prohibited or not described by the Common Claims or by its Subject Identifier Type, and MUST contain all payload claims required by its Subject Identifier Type.
 
 The following Subject Identifier Types are registered in the IANA "Security Event Subject Identifier Types" registry established by {{iana-sub-id-types}}.
 
@@ -187,6 +269,34 @@ Below is a non-normative example Subject Identifier for the Aliases Subject Iden
 }
 ~~~
 {: #figexamplesubididtoken  title="Example: Subject Identifier for the Aliases Subject Identifier Type."}
+
+SPAG Subject Identifier Type {#sub-id-spag}
+----------------------------
+The SPAG Subject Identifier Type describes a Subject Principal Administrative Grouping or SPAG ({{subject-groups}}). Subject Identifiers of this type MUST contain a `spag_id` claim, a unique identifier agreed to offline between a Transmitter and a Receiver that identifies a SPAG uniquely within the Transmitter. The `spag_id` claim MUST NOT be null or empty. The SPAG Subject Identifier Type is identified by the name `spag`.
+
+Below is an non-normative example Subject Identifier for the SPAG Subject Identifier Type:
+
+~~~
+{
+  "subject_type": "spag",
+  "spag_id" : "https://example.com/v2/Groups/e9e30dba-f08f-4109-8486-d5c6a331660a",
+}
+~~~
+{: #figexamplesubspag title="Example: Subject Identifier for SPAG Subject Identifier Type."}
+
+SAML Subject Identifier Type {#sub-id-saml}
+----------------------------
+The [SAML](#SAML.REF)  Subject Identifier Type describes a subject by the assertion identifier in the SAML assertion that was used to convey the subject's information to the Receiver. Subject Identifiers of this type MUST contain an ` assertion_id` claim. The value of this claim is a string that is equal to the Assertion Identifier in the SAML assertion. The SAML Subject Identifier Type is identified by the name `saml`.
+
+Below is a non-normative example Subject Identifier for the SAML Subject Identifier Type:
+
+~~~
+{
+  "subject_type": "saml",
+  "assertion_id": "_f551d88963ab4e3decb7cfe8f4dcc3f5",
+}
+~~~
+{: #figexamplesubsaml title="Example: Subject Identifier for SAML Subject Identifier Type."}
 
 Subject Identifiers in JWTs {#jwt-claims}
 ===========================
@@ -416,3 +526,6 @@ Draft 05 - AB:
 
 * Renamed the `phone` type to `phone-number` and its `phone` claim to `phone_number`.
 
+Draft 06 - AT:
+
+* Brought in subject identifier updates from the draft SSE profile spec.
